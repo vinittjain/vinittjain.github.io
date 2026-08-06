@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Head -->
+
+<head>
+  <!-- Metadata, OpenGraph and Schema.org -->
+
+  <!-- Standard metadata -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Benchmarking local LLMs: what an RTX 2080Ti can actually do | Vinit Jain</title>
+  <meta name="author" content="Vinit Jain" />
+  <meta name="description" content="Benchmarking two quantized models: Bonsai-27B and Nanbeige4.2-3B, on an 8-year-old RTX 2080 Ti, and what the prefill/decode split actually means for context length." />
+  <meta name="keywords" content="llm, quantization, llama.cpp, local inference, benchmarking, gpu, rtx 2080 ti" />
+
+  <!-- Bootstrap & MDB -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha256-DF7Zhf293AJxJNTmh5zhoYYIMs2oXitRfBjY+9L//AY=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mdbootstrap@4.20.0/css/mdb.min.css"
+    integrity="sha256-jpjYvU3G3N6nrrBwXJoVEYI/0zw8htfFnhT9ljN3JJw=" crossorigin="anonymous" />
+
+  <!-- Fonts & Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.7.2/css/all.min.css"
+    integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/academicons@1.9.1/css/academicons.min.css"
+    integrity="sha256-i1+4qU2G2860dGGIOJscdC30s9beBXjFfzjWLjBRsBg=" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css"
+    href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Roboto+Slab:100,300,400,500,700|Material+Icons">
+
+  <!-- Code Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jwarby/jekyll-pygments-themes@master/github.css" media="none"
+    id="highlight_theme_light" />
+
+  <!-- Styles -->
+  <link rel="shortcut icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛️</text></svg>">
+
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="/assets/css/writing.css">
+  <link rel="canonical" href="https://vinittjain.github.io/writing/benchmarking-local-llms-2080ti/">
+
+  <!-- Dark Mode -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jwarby/jekyll-pygments-themes@master/native.css" media="none"
+    id="highlight_theme_dark" />
+
+  <script src="/assets/js/theme.js"></script>
+  <script src="/assets/js/dark_mode.js"></script>
+</head>
+
+<!-- Body -->
+
+<body class="fixed-top-nav ">
+
+  <!-- Header -->
+  <header>
+
+    <!-- Nav Bar -->
+    <nav id="navbar" class="navbar navbar-light navbar-expand-sm fixed-top">
+      <div class="container">
+        <a class="navbar-brand title font-weight-lighter" href="https://vinittjain.github.io/"><span
+            class="font-weight-bold">Vinit</span> Jain</a>
+        <!-- Navbar Toggle -->
+        <button class="navbar-toggler collapsed ml-auto" type="button" data-toggle="collapse" data-target="#navbarNav"
+          aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="sr-only">Toggle navigation</span>
+          <span class="icon-bar top-bar"></span>
+          <span class="icon-bar middle-bar"></span>
+          <span class="icon-bar bottom-bar"></span>
+        </button>
+
+        <div class="collapse navbar-collapse text-right" id="navbarNav">
+          <ul class="navbar-nav ml-auto flex-nowrap">
+
+            <!-- About -->
+            <li class="nav-item ">
+              <a class="nav-link" href="/">intro</a>
+            </li>
+
+            <li class="nav-item ">
+              <a class="nav-link" href="/resume/">resume</a>
+            </li>
+
+            <!-- Blog -->
+            <li class="nav-item active">
+              <a class="nav-link" href="/writing/">writing<span class="sr-only">(current)</span></a>
+            </li>
+
+            <!-- Other pages -->
+            <li class="nav-item ">
+              <a class="nav-link" href="/projects/">projects</a>
+            </li>
+
+            <!-- Toogle theme mode -->
+            <div class="toggle-container">
+              <a id="light-toggle">
+                <i class="fas fa-moon"></i>
+                <i class="fas fa-sun"></i>
+              </a>
+            </div>
+          </ul>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Content -->
+  <div class="container mt-5">
+    <div class="post">
+
+      <header class="post-header">
+        <h1 class="post-title">Benchmarking local LLMs: what an RTX 2080Ti can actually do</h1>
+        <p class="post-meta">August 1, 2026</p>
+      </header>
+
+      <article class="post-content">
+
+        <p class="post-subtitle">Two quantized models, one eight-year-old GPU, and what the prefill/decode split reveals about attention vs. state-space costs.</p>
+
+        <p>Running large language models locally used to mean either a cloud API or a GPU with far more VRAM than most people own. This weekend I benchmarked two quantized models: one at 27 billion parameters, one at roughly 4 billion, on an RTX 2080 Ti, a card that's eight years old with 11GB of VRAM. Both ran. I wanted to actually measure how well, across two very different model sizes, instead of just taking "it works" as the whole story.</p>
+
+        <p>Here's what makes that possible, what I tested, and what the numbers actually say.</p>
+
+        <nav class="toc">
+          <h3>Contents</h3>
+          <ol>
+            <li><a href="#quantization">Quantization: how both models got this small</a></li>
+            <li><a href="#running-locally">What "running it locally" actually means</a></li>
+            <li><a href="#the-two-models">The two models</a></li>
+            <li><a href="#how-benchmarked">How I benchmarked them</a></li>
+            <li><a href="#results">Results</a></li>
+            <li><a href="#why-the-gap">Why the gap: attention vs. state-space math</a></li>
+            <li><a href="#kv-cache">How much further a quantized KV cache pushes it</a></li>
+            <li><a href="#where-this-leaves-things">Where this leaves things</a></li>
+          </ol>
+        </nav>
+
+        <div class="row mt-3">
+          <div class="col-sm mt-3 mt-md-0">
+            <video class="img-fluid rounded z-depth-1 d-block mx-auto" controls muted playsinline preload="metadata">
+              <source src="/assets/img/blog/localbench-demo.mp4" type="video/mp4">
+              Your browser doesn't support embedded video; you can <a href="/assets/img/blog/localbench-demo.mp4">download the clip directly</a>.
+            </video>
+          </div>
+        </div>
+        <div class="caption">
+          LocalBench: the GUI I built for chatting with these models, with live GPU utilization, VRAM, and per-token benchmark metrics streaming alongside the conversation.
+        </div>
+
+        <h3 id="quantization">Quantization: how both models got this small</h3>
+
+        <p>A model's weights are normally stored as 16-bit or 32-bit floating point numbers: that's what the model was trained in. Quantization takes those weights and represents them with far fewer bits, trading some precision for a much smaller file and less memory bandwidth needed to run it. A model quantized to 4-bit uses roughly a quarter of the storage of its 16-bit original; a model quantized all the way to 1-bit uses roughly a sixteenth.</p>
+
+        <p>The two models I tested sit at opposite ends of that spectrum. Both fit comfortably inside 11GB of VRAM. Neither would fit anywhere close to that space running at full precision: a 27B model at 16-bit would need roughly 54GB just for the weights, before accounting for anything else the GPU needs to hold during inference.</p>
+
+        <div class="row mt-3">
+          <div class="col-sm mt-3 mt-md-0">
+            <img class="img-fluid rounded z-depth-1 d-block mx-auto" src="/assets/img/blog/localbench-specs.png" alt="Bonsai-27B vs Nanbeige4.2-3B full spec comparison table">
+          </div>
+        </div>
+        <div class="caption">
+          Both models tested on the same RTX 2080 Ti.
+        </div>
+
+        <h3 id="running-locally">What "running it locally" actually means</h3>
+
+        <p>Running a model locally means the weights and the inference engine both live on your own hardware: nothing is sent to a third-party server to generate a response. I'm using llama.cpp, an open-source inference engine that's become the standard way to run quantized GGUF-format models on consumer GPUs (and CPUs, if you don't have a GPU at all). Some model architectures aren't supported in mainline llama.cpp yet, so both models here run on separate forks maintained for their specific architectures: that's a normal part of running less mainstream models locally right now.</p>
+
+        <h3 id="the-two-models">The two models</h3>
+
+        <p>Both models were trained on a 262,144 token context window, but neither can use all of it here: VRAM runs out before the model does. I found the real ceiling on this GPU with a binary search: load progressively larger contexts until it segfaults, then reduce it. Bonsai's ceiling is around 98K tokens, Nanbeige's around 45K. I run both with a safety margin below that, since failures past the ceiling are hard crashes, not an out-of-memory error.</p>
+
+        <h3 id="how-benchmarked">How I benchmarked them</h3>
+
+        <p>I used llama-bench (llama.cpp's built-in benchmarking tool) at three prompt depths: 512, 4,096, and 16,384 tokens, each followed by 128 generated tokens, 3 repetitions per depth. Every request to a model has two distinct phases: prefill, where the model processes the entire prompt before generating anything, and decode, where it generates the reply one token at a time. Time to first token (TTFT) is the wall-clock consequence of prefill: how long you actually wait before seeing a word.</p>
+
+        <h3 id="results">Results</h3>
+
+        <p>Prefill throughput falls as the prompt gets longer, for both models.</p>
+
+        <div class="row mt-3">
+          <div class="col-sm mt-3 mt-md-0">
+            <img class="img-fluid rounded z-depth-1 d-block mx-auto" src="/assets/img/blog/localbench-prefill.png" alt="Prefill throughput drops as prompts get longer">
+          </div>
+        </div>
+        <div class="caption">
+          Bonsai drops 17% (834 → 696 tok/s) from the shortest to longest prompt; Nanbeige drops 45% (2,489 → 1,378 tok/s). Every token in the prompt has to attend back over every token before it, so the per-token cost of prefill rises with the prompt itself, on top of there simply being more tokens to process.
+        </div>
+
+        <p>Decode barely reacts to any of this.</p>
+
+        <div class="row mt-3">
+          <div class="col-sm mt-3 mt-md-0">
+            <img class="img-fluid rounded z-depth-1 d-block mx-auto" src="/assets/img/blog/localbench-decode.png" alt="Decode throughput barely moves across prompt depths">
+          </div>
+        </div>
+        <div class="caption">
+          Bonsai dips 9% (47.9 → 43.8 tok/s); Nanbeige is flat (90.0 → 90.1 tok/s). Once generation starts, each new token only attends back over the KV cache that's already been computed: adding one more entry to it doesn't meaningfully change the cost of producing the next token, regardless of how long the prompt was.
+        </div>
+
+        <p>That decode number is worth pausing on for another reason: this GPU is eight years old, and 90 tok/s (or even Bonsai's 44 tok/s on a 27B model) is still a genuinely usable speed. The reason it holds up has to do with what decode actually taxes. Generating one token at a time means streaming the model's weights and the KV cache out of VRAM over and over: decode is bottlenecked by memory bandwidth, not raw compute. The RTX 2080 Ti has unusually high memory bandwidth for a consumer card, even by today's standards: a 352-bit memory bus rated at 616 GB/s, a spec several newer, cheaper cards have actually shipped with less of, since Nvidia has narrowed memory buses on more recent mid-range dies to cut cost. Prefill, which leans much more on raw compute across many tokens at once, is where a newer GPU's generational gains would actually show up; decode has less to gain from a compute-focused upgrade, because bandwidth was never this card's weak point to begin with.</p>
+
+        <p>This is what a user actually feels. Time to first token is prefill's real-world cost, and since prefill is the phase that degrades, TTFT is where the pain shows up.</p>
+
+        <div class="row mt-3">
+          <div class="col-sm mt-3 mt-md-0">
+            <img class="img-fluid rounded z-depth-1 d-block mx-auto" src="/assets/img/blog/localbench-ttft.png" alt="Time to first token grows sharply with prompt depth">
+          </div>
+        </div>
+        <div class="caption">
+          614ms to 23.5 seconds for Bonsai, 206ms to 11.9 seconds for Nanbeige, purely as a function of prompt length. Once that first word appears, though, generation proceeds at essentially the same speed a short prompt would have gotten.
+        </div>
+
+        <h3 id="why-the-gap">Why the gap: attention vs. state-space math</h3>
+
+        <p>The 17% vs. 45% difference in how much prefill degraded is worth digging into, because it isn't just "the bigger model held up better." Bonsai is roughly six times larger than Nanbeige by parameter count: if size were the deciding factor, Bonsai should be the slower, more strained model at long context, not the one that degraded less.</p>
+
+        <p>The more likely explanation is architectural. Standard transformer attention has a cost that grows with the square of sequence length: to process token number 16,000, the model has to compute how it relates to all 15,999 tokens before it. Token 500 only has to look back at 499. That's why prefill throughput drops as prompts get longer even before you factor in there simply being more tokens to process: the per-token cost itself is rising.</p>
+
+        <p>Mamba, the architecture Bonsai partially uses, works differently. It's a state-space model (SSM): instead of attending back over every previous token, each new token updates a fixed-size internal state and moves on. The cost of processing token 16,000 is roughly the same as the cost of processing token 500, because the model isn't re-examining everything that came before; it's just carrying forward a compressed summary of it. That gives SSMs a cost that scales close to linearly with sequence length, instead of quadratically.</p>
+
+        <p>Bonsai isn't a pure state-space model; it's a hybrid, mixing Mamba layers with regular attention layers (a design pattern shared by models like Jamba and a handful of other recent hybrid architectures). The idea behind hybrids like this is to keep some attention layers around because pure SSMs can be weaker at precise long-range recall (needle-in-a-haystack lookups, for instance) while leaning on Mamba layers for the bulk of the sequence processing to keep the overall cost down. My guess is that's exactly what I'm seeing: only a fraction of Bonsai's layers pay something close to attention's quadratic-ish tax, while Nanbeige, a dense transformer, pays that tax on every layer, at every depth — and pays it twice over, since Nanbeige4.2-3B uses a looped-transformer design that passes hidden states through its physical layers a second time to approximate a deeper model, roughly doubling the attention work per token relative to a same-sized model run straight through once.</p>
+
+        <div class="callout-note">
+          It's worth being precise about Nanbeige's architecture, since "small and efficient" invites the assumption that it's a Mixture-of-Experts model. It isn't: Nanbeige is dense, every parameter activates for every token, there's no routing to specialized expert sub-networks. What its 4.2 generation does instead is loop: the same physical layers run twice per forward pass to increase effective capacity without adding parameters. Neither property changes how attention scales with sequence length the way Mamba does, so the conclusion is unchanged: Nanbeige still pays full quadratic attention cost as the prompt grows, and the loop means it's paying that cost across roughly twice the effective depth, which tracks with what I saw, small and efficient at short prompts, but its prefill throughput fell off a cliff by comparison once the prompt got long.
+        </div>
+
+        <div class="callout-warning">
+          <strong>Limitation:</strong> none of this is something I can prove from a benchmark of two models alone: I'd want to test more hybrid vs. looped-transformer pairs at matched parameter counts to really isolate the effect. But the direction of the result lines up cleanly with what the architectures would predict, and it's the kind of thing that matters more than raw parameter count if you're picking a model for anything involving long context.
+        </div>
+
+        <h3 id="kv-cache">How much further a quantized KV cache pushes it</h3>
+
+        <p>Everything above was measured with the default F16 KV cache: the per-token memory that stores each generated token's key/value vectors so later tokens can attend back to them without recomputing. That cache, not just the model weights, is what actually runs out of room first on this GPU. It can be quantized too, independently of the weights, via llama.cpp's <code>-fa on -ctk &lt;type&gt; -ctv &lt;type&gt;</code> flags: <code>-fa</code> (flash attention) is a hard prerequisite for the other two. I re-measured the real ceiling the same way as before (binary search to the point of a hard crash, not a guess) at Q8_0 and Q4_0, re-running F16 in the same session for a like-for-like baseline rather than reusing the numbers from the section above: the two F16 figures differ slightly (session-to-session variance, not a contradiction) precisely because they come from separate benchmark runs on different days.</p>
+
+        <div class="table-responsive mt-3">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>KV cache</th>
+                <th>Context ceiling</th>
+                <th>Decode @ 16K tok/s</th>
+                <th>Δ vs F16</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Bonsai-27B</td><td>F16</td><td>98,304</td><td>42.2</td><td>—</td></tr>
+              <tr><td>Bonsai-27B</td><td>Q8_0</td><td>155,648 (+58%)</td><td>41.9</td><td>-0.9%</td></tr>
+              <tr><td>Bonsai-27B</td><td>Q4_0</td><td>262,144 (full trained context, +167%)</td><td>41.1</td><td>-2.6%</td></tr>
+              <tr><td>Nanbeige4.2-3B</td><td>F16</td><td>45,056</td><td>84.3</td><td>—</td></tr>
+              <tr><td>Nanbeige4.2-3B</td><td>Q8_0</td><td>77,824 (+73%)</td><td>89.4</td><td>+6.0%</td></tr>
+              <tr><td>Nanbeige4.2-3B</td><td>Q4_0</td><td>141,312 (+214%)</td><td>89.0</td><td>+5.5%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The headline is that this was nearly free either way: decode speed held essentially flat for Bonsai and, if anything, ticked up for Nanbeige. I don't have a confident explanation for why quantizing the cache would make Nanbeige faster rather than just cheaper on memory. Either way, in exchange for at most a small decode cost, Bonsai went from 98K usable tokens to its <em>entire</em> 262K trained context at Q4_0, and Nanbeige more than tripled its ceiling.</p>
+
+        <p>Q8_0 is what I've since made the default for both models day-to-day: a good balance of headroom and safety margin.</p>
+
+        <div class="callout-warning">
+          <strong>Trade-off, not a free upgrade:</strong> Q4_0 goes further still, all the way to Bonsai's full trained context, but quantizing the cache isn't free on the quality side even where the speed holds up: it's a real trade-off, worth a sanity check on actual output quality before leaning on it.
+        </div>
+
+        <h3 id="where-this-leaves-things">Where this leaves things</h3>
+
+        <p>Both of these are real, usable models, running with meaningful context windows, entirely on an 8-year-old consumer GPU. That's the actual headline here. The prefill/decode split is worth understanding if you're building something on top of this (long documents and RAG pipelines pay their cost up front, not throughout), but it's a detail underneath the bigger point: this class of model, at this level of capability, now fits on hardware most people already have.</p>
+
+
+      </article>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="fixed-bottom">
+    <div class="container mt-0">
+      &copy; Copyright 2026 Vinit Jain. Powered by <a href="https://jekyllrb.com/" target="_blank">Jekyll</a> with <a
+        href="https://github.com/alshedivat/al-folio">al-folio</a> theme. Hosted by <a href="https://pages.github.com/"
+        target="_blank">GitHub Pages</a>.
+    </div>
+  </footer>
+
+  <!-- JavaScripts -->
+  <!-- jQuery -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"
+    integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+
+  <!-- Bootsrap & MDB scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.2/dist/umd/popper.min.js"
+    integrity="sha256-l/1pMF/+J4TThfgARS6KwWrk/egwuVvhRzfLAMQ6Ds4=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/js/bootstrap.min.js"
+    integrity="sha256-SyTu6CwrfOhaznYZPoolVw2rxoY7lKYKQvqbtqN93HI=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mdbootstrap@4.20.0/js/mdb.min.js"
+    integrity="sha256-NdbiivsvWt7VYCt6hYNT3h/th9vSTL4EDWeGs5SN3DA=" crossorigin="anonymous"></script>
+
+  <!-- Masonry & imagesLoaded -->
+  <script defer src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"
+    integrity="sha256-Nn1q/fx0H7SNLZMQ5Hw5JLaTRZp0yILA/FRexe19VdI=" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/imagesloaded@4/imagesloaded.pkgd.min.js"></script>
+  <script defer src="/assets/js/masonry.js" type="text/javascript"></script>
+
+  <!-- Medium Zoom JS -->
+  <script src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js"
+    integrity="sha256-EdPgYcPk/IIrw7FYeuJQexva49pVRZNmt3LculEr7zM=" crossorigin="anonymous"></script>
+  <script src="/assets/js/zoom.js"></script>
+  <script src="/assets/js/common.js"></script>
+
+  <!-- MathJax -->
+  <script type="text/javascript">
+    window.MathJax = {
+      tex: {
+        tags: 'ams'
+      }
+    };
+  </script>
+  <script defer type="text/javascript" id="MathJax-script"
+    src="https://cdn.jsdelivr.net/npm/mathjax@3.2.0/es5/tex-mml-chtml.js"></script>
+
+</body>
+
+</html>

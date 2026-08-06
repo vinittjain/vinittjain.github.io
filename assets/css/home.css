@@ -1,0 +1,164 @@
+/* Homepage polish pass — layered on top of main.css, scoped to index.html only.
+   Reuses the site's existing --global-* variables so dark mode and the
+   theme accent stay wired up automatically. */
+
+body {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.intro-header {
+  display: flex;
+  gap: 36px;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.intro-avatar {
+  flex: 0 0 172px;
+  width: 172px;
+  height: 172px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme='dark'] .intro-avatar {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.intro-text h1 {
+  font-size: 2.6rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+
+.intro-text .tagline {
+  margin: 0;
+  color: var(--global-text-color-light);
+  font-style: italic;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 600px) {
+  .intro-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+  .intro-text h1 {
+    font-size: 2.4rem;
+  }
+}
+
+.bio-content {
+  margin-bottom: 20px;
+}
+
+.bio-content p {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+}
+
+.bio-content p:last-child {
+  margin-bottom: 0;
+}
+
+.news {
+  border-top: 1px solid var(--global-divider-color);
+  padding-top: 20px;
+  margin-bottom: 24px;
+}
+
+.news h2 {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+
+.news-row {
+  display: flex;
+  gap: 22px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--global-divider-color);
+  align-items: baseline;
+}
+
+.news-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.news-row:first-child {
+  padding-top: 0;
+}
+
+.news-date {
+  flex: 0 0 100px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--global-theme-color);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.news-text {
+  font-size: 0.92rem;
+  color: var(--global-text-color);
+}
+
+.news-row.old .news-date,
+.news-row.old .news-text {
+  color: var(--global-text-color-light);
+}
+
+@media (max-width: 560px) {
+  .news-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .news-date {
+    flex-basis: auto;
+  }
+}
+
+.social {
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--global-divider-color);
+}
+
+.social-icons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.social-icons a {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--global-text-color-light);
+  border: 1px solid var(--global-divider-color);
+  font-size: 1.1rem;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.social-icons a:hover {
+  color: var(--global-theme-color);
+  border-color: var(--global-theme-color);
+}
+
+.social .contact-note {
+  font-size: 0.92rem;
+  color: var(--global-text-color-light);
+}
